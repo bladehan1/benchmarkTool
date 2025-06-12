@@ -1,0 +1,31 @@
+<configuration>
+    <!-- 控制台输出 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- LevelDB 专用日志 -->
+    <appender name="LEVELDB_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/leveldb.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/leveldb.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{ISO8601} [%thread] %level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+<!--    &lt;!&ndash; 日志级别配置 &ndash;&gt;-->
+<!--    <logger name="LEVELDB" level="DEBUG" >-->
+<!--        <appender-ref ref="LEVELDB_FILE"/>-->
+<!--    </logger>-->
+
+    <root level="INFO">
+        <appender-ref ref="LEVELDB_FILE"/>
+    </root>
+</configuration>
