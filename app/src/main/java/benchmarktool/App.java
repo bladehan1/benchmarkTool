@@ -3,7 +3,7 @@ package benchmarktool;
 import static java.lang.System.exit;
 import static java.lang.Thread.sleep;
 import static org.fusesource.leveldbjni.JniDBFactory.factory;
-
+import java.util.concurrent.ThreadLocalRandom;
 
 import io.prometheus.client.Counter;
 import io.prometheus.client.Histogram;
@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -45,7 +44,7 @@ public class App {
     private static final int RANDOM_LENGTH = 10;
     private static  int THREAD_BEGIN = 0;
     private static  int THREAD_INC_TIME = 10;
-    private static final Random random = new Random();
+    private static  boolean RandomI = true;
     private static List<byte[]> keyList = new ArrayList<>();
     static final Histogram requestDuration = Histogram.build()
         .name("request")
@@ -60,27 +59,19 @@ public class App {
     // 使用 SLF4J 创建日志器
     private static final org.slf4j.Logger innerLogger = LoggerFactory.getLogger(App.class);
 //
-    private static Logger leveldbLogger = new Logger() {
-        @Override
-        public void log(String message) {
-            innerLogger.info("{} {}","leveldb", message);
-            // case 标签必须是常量表达式，不能执行方法
-//            switch(message){
-//                case message.startsWith("Recovering"):
-//                   break;
-//            }
-            if (message.startsWith("Recovering")) {
-                levelDBCounter.labels("recover").inc();
-            }
-            if (message.startsWith("Compacting")) {
-                levelDBCounter.labels("compact").inc();
-            }
-            if (message.startsWith("Delete")) {
-                levelDBCounter.labels("delete").inc();
-            }
-            if (message.startsWith("Generated")) {
-                levelDBCounter.labels("create").inc();
-            }
+    private static Logger leveldbLogger = message -> {
+        innerLogger.info("{} {}","leveldb", message);
+        if (message.startsWith("Recovering")) {
+            levelDBCounter.labels("recover").inc();
+        }
+        if (message.startsWith("Compacting")) {
+            levelDBCounter.labels("compact").inc();
+        }
+        if (message.startsWith("Delete")) {
+            levelDBCounter.labels("delete").inc();
+        }
+        if (message.startsWith("Generated")) {
+            levelDBCounter.labels("create").inc();
         }
     };
 
@@ -105,6 +96,7 @@ public class App {
         options.addOption("duration", true, "Duration in seconds");
         options.addOption("geneKey", false, "gene100wKey");
         options.addOption("geneKeyNum", true, "生成key大小");
+        options.addOption("random", true, "是否随机起始位置");
 
         options.addOption("help", false, "Print help");
         CommandLineParser parser = new DefaultParser();
@@ -128,8 +120,9 @@ public class App {
             THREAD_INC_TIME = Integer.parseInt(cmd.getOptionValue("threadIncTime", "10"));
             int duration = Integer.parseInt(cmd.getOptionValue("duration", "10"));
             String path =cmd.getOptionValue(DB_PATH, "/tmp/test_db");
+            RandomI =Boolean.parseBoolean(cmd.getOptionValue("random", "true"));
 
-            System.out.println("dbType: " + dbType);
+            System.out.printf("dbType: %s,random:%s\n" , dbType,RandomI);
             System.out.printf("threads:%d,threadBegin:%d,threadIncTime:%d s\n" , threads,THREAD_BEGIN,THREAD_INC_TIME);
             System.out.println("duration: " + duration);
             System.out.println("path: " + path);
@@ -184,7 +177,6 @@ public class App {
         ReadOptions readOptions = new ReadOptions().snapshot(snapshot);
 
         List<byte[]> reservoir = new ArrayList<>(reservoirSize);
-        Random random = new Random();
         printTime();
         try (DBIterator iterator = db.iterator(readOptions)) {
             iterator.seekToFirst();
@@ -198,7 +190,7 @@ public class App {
                     reservoir.add(Arrays.copyOf(key, key.length));
                 } else {
                     // 生成随机数决定是否替换蓄水池中的元素
-                    int r = random.nextInt((int) count);
+                    int r = ThreadLocalRandom.current().nextInt((int) count);
                     if (r < reservoirSize) {
                         reservoir.set(r, Arrays.copyOf(key, key.length));
                     }
@@ -221,7 +213,8 @@ public class App {
         System.out.println("reservoir size: "+reservoir.size());
         // 使用固定随机种子（确保结果可复现）
         long seed = 123L;
-        Collections.shuffle(reservoir, new Random(seed));
+        ThreadLocalRandom.current().setSeed(seed);
+        Collections.shuffle(reservoir, ThreadLocalRandom.current());
 
         BinaryFileWriter binaryFileWriter=new BinaryFileWriter();
         try {
@@ -292,9 +285,14 @@ public class App {
             DB finalLeveldb = leveldb;
             RocksDB finalRocksdb = rocksdb;
             int finalI = i-1;
+            int keyLength =  keyList.size()/threads;
             executor.submit(() -> {
                 try {
-                    int j=0;
+                    int j = 0;
+                    if (RandomI) {
+                         j = ThreadLocalRandom.current().nextInt(keyLength);
+                         innerLogger.debug("random j={}",j);
+                    }
                     if (dbType.equalsIgnoreCase("leveldb")) {
 
                         while (System.currentTimeMillis() < endTime) {
@@ -369,7 +367,7 @@ public class App {
         StringBuilder sb = new StringBuilder(prefix);
         for (int i = 0; i < RANDOM_LENGTH; i++) {
             // 从字符集中随机选取一个字符
-            int index = random.nextInt(CHARACTERS.length());
+            int index = ThreadLocalRandom.current().nextInt(CHARACTERS.length());
             sb.append(CHARACTERS.charAt(index));
         }
         return sb.toString().getBytes();
