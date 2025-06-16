@@ -3,6 +3,9 @@ package benchmarktool;
 import static java.lang.System.exit;
 import static java.lang.Thread.sleep;
 import static org.fusesource.leveldbjni.JniDBFactory.factory;
+
+
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 import io.prometheus.client.Counter;
@@ -97,6 +100,7 @@ public class App {
         options.addOption("geneKey", false, "gene100wKey");
         options.addOption("geneKeyNum", true, "生成key大小");
         options.addOption("random", true, "是否随机起始位置");
+        options.addOption("iter", true, "统计前缀数量");
 
         options.addOption("help", false, "Print help");
         CommandLineParser parser = new DefaultParser();
@@ -112,6 +116,11 @@ public class App {
                 Gene100wKey(cmd.getOptionValue(DB_PATH, "/tmp/test_db"),geneKeyNum);
                 System.out.println("geneKey success");
                 return;
+            }
+            else if(cmd.hasOption("iter")){
+                String iter = cmd.getOptionValue("iter", "");
+                iterCount(cmd.getOptionValue(DB_PATH, "/tmp/test_db"),iter);
+                return ;
             }
             keyList = BinaryFileLoader.loadFromFile(FILE_KEY);
             String dbType = cmd.getOptionValue(DB_TYPE, "leveldb");
@@ -372,4 +381,28 @@ public class App {
         }
         return sb.toString().getBytes();
     }
+    private static void iterCount(String path,String hexPrefix){
+        DB db = null;
+        try {
+            db = factory.open(new File(path), new org.iq80.leveldb.Options());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        iterCount(hexPrefix,db);
+    }
+    private static void iterCount(String hexAddress, DB db) {
+        byte[] prefixKey = CommonUtil.fromHexString(hexAddress);
+        DBIterator iterator = db.iterator();
+        int i=0;
+        for (iterator.seek(prefixKey); iterator.hasNext(); iterator.next()) {
+            if(i<3){
+                Map.Entry<byte[], byte[]> entry = iterator.peekNext();
+                innerLogger.info("prefix:{},example {}",hexAddress,CommonUtil.bytesToHex(entry.getKey()));
+            }
+            i++;
+        }
+        innerLogger.info("prefix:{},count {}",hexAddress,i);
+        System.out.printf("prefix:%s,count %d",hexAddress,i);
+    }
+
 }
