@@ -5,6 +5,7 @@ import static java.lang.Thread.sleep;
 import static org.fusesource.leveldbjni.JniDBFactory.factory;
 
 
+import com.google.common.primitives.Bytes;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -395,10 +396,16 @@ public class App {
         DBIterator iterator = db.iterator();
         int i=0;
         for (iterator.seek(prefixKey); iterator.hasNext(); iterator.next()) {
-            if(i<3){
-                Map.Entry<byte[], byte[]> entry = iterator.peekNext();
-                innerLogger.info("prefix:{},example {}",hexAddress,CommonUtil.bytesToHex(entry.getKey()));
+            Map.Entry<byte[], byte[]> entry = iterator.peekNext();
+
+            if (Bytes.indexOf(entry.getKey(), prefixKey) == 0) {
+                if(i<3){
+                    innerLogger.info("prefix:{},example {}",hexAddress,CommonUtil.bytesToHex(entry.getKey()));
+                }
+            }else{
+                break;
             }
+
             i++;
         }
         innerLogger.info("prefix:{},count {}",hexAddress,i);
